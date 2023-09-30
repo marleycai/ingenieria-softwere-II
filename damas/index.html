@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Juego de Damas</title>
+  <style>
+    /* Estilos aquí */
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #f0f0f0;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 60px);
+      grid-template-rows: repeat(8, 60px);
+      gap: 2px;
+      border: 2px solid #333;
+      margin-bottom: 20px;
+    }
+
+    .cell {
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    .dark {
+      background-color: #8B4513; /* Marrón oscuro */
+    }
+
+    .light {
+      background-color: #D2B48C; /* Marrón claro */
+    }
+
+    /* Estilo para las fichas */
+    .piece {
+      width: 80%;
+      height: 80%;
+      border-radius: 50%;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .red {
+      background-color: red;
+    }
+
+    .black {
+      background-color: black;
+    }
+
+    .status {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .reset-button {
+      padding: 10px 20px;
+      font-size: 18px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+
+    .reset-button:hover {
+      background-color: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <div class="status" id="status">Turno del jugador rojo</div>
+  <div class="board">
+    <!-- Contenido generado dinámicamente -->
+  </div>
+  <button class="reset-button" onclick="resetGame()">Reiniciar juego</button>
+
+  <script>
+    const GameState = {
+      EMPTY: 0,
+      BLACK: 1,
+      RED: 2,
+      BLACK_KING: 3,
+      RED_KING: 4
+    };
+
+    const initialBoardState = [
+      [0, 2, 0, 2, 0, 2, 0, 2],
+      [2, 0, 2, 0, 2, 0, 2, 0],
+      [0, 2, 0, 2, 0, 2, 0, 2],
+      [0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0],
+      [1, 0, 1, 0, 1, 0, 1, 0],
+      [0, 1, 0, 1, 0, 1, 0, 1],
+      [1, 0, 1, 0, 1, 0, 1, 0]
+    ];
+
+    const game = {
+      board: [...initialBoardState],
+      currentPlayer: GameState.RED,
+      selectedPiece: null,
+      isCapturing: false
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const boardElement = document.querySelector('.board');
+
+      renderBoard(game.board);
+
+      boardElement.addEventListener('click', handleCellClick);
+    });
+
+    function renderBoard(board) {
+      const boardElement = document.querySelector('.board');
+
+      boardElement.innerHTML = '';
+
+      for (let i = 0; i < 8; i++) {
+        const rowElement = document.createElement('div');
+        rowElement.classList.add('row');
+
+        for (let j = 0; j < 8; j++) {
+          const cellElement = document.createElement('div');
+          cellElement.classList.add('cell');
+          cellElement.classList.add((i + j) % 2 === 0 ? 'dark' : 'light');
+
+          if (board[i][j] !== 0) {
+            const pieceElement = document.createElement('div');
+            pieceElement.classList.add('piece');
+            pieceElement.classList.add(board[i][j] === GameState.RED ? 'red' : 'black');
+            cellElement.appendChild(pieceElement);
+            cellElement.addEventListener('click', () => handlePieceClick(i, j));
+          }
+
+          cellElement.dataset.row = i; // Asignar la fila
+          cellElement.dataset.col = j; // Asignar la columna
+
+          rowElement.appendChild(cellElement);
+        }
+
+        boardElement.appendChild(rowElement);
+      }
+    }
+
+    function handleCellClick(event) {
+      const target = event.target;
+      const row = parseInt(target.dataset.row, 10);
+      const col = parseInt(target.dataset.col, 10);
+
+      if (!isNaN(row) && !isNaN(col)) {
+        if (game.selectedPiece) {
+          const isValidMove = isValidDiagonalMove(game.selectedPiece.row, game.selectedPiece.col, row, col);
+          const isCapture = Math.abs(row - game.selectedPiece.row) === 2;
+
+          if (isValidMove && (game.board[row][col] === GameState.EMPTY || (isCapture && game.isCapturing))) {
+            // Move the piece
+            game.board[row][col] = game.board[game.selectedPiece.row][game.selectedPiece.col];
+            game.board[game.selectedPiece.row][game.selectedPiece.col] = GameState.EMPTY;
+
+            // Clear selection
+            game.selectedPiece = null;
+
+            // Handle capture
+            if (isCapture) {
+              const capturedRow = (game.selectedPiece.row + row) / 2;
+              const capturedCol = (game.selectedPiece.col + col) / 2;
+              game.board[capturedRow][capturedCol] = GameState.EMPTY;
+
+              // Check for more captures
+              const canCaptureMore = canPieceCapture(row, col);
+              if (canCaptureMore) {
+                game.selectedPiece = { row, col };
+                game.isCapturing = true;
+                renderBoard(game.board);
+                return;
+              }
+            }
+
+            // Coronar peones
+            if (game.currentPlayer === GameState.RED && row === 0) {
+              game.board[row][col] = GameState.RED_KING;
+            } else if (game.currentPlayer === GameState.BLACK && row === 7) {
+              game.board[row][col] = GameState.BLACK_KING;
+            }
+
+            // Clear capturing flag
+            game.isCapturing = false;
+
+            // Toggle player
+            game.currentPlayer = game.currentPlayer === GameState.RED ? GameState.BLACK : GameState.RED;
+
+            // Check for a winner
+            const winner = checkWinner();
+            if (winner !== null) {
+              alert(`El jugador ${winner === GameState.RED ? 'rojo' : 'negro'} ha ganado.`);
+              resetGame();
+            }
+
+            // Render the updated board
+            renderBoard(game.board);
+            updateStatus();
+          } else {
+            console.log('Movimiento inválido.');
+          }
+        } else {
+          console.log('Ninguna pieza seleccionada.');
+        }
+      }
+    }
+
+    function handlePieceClick(row, col) {
+      const piece = game.board[row][col];
+
+      if (piece === game.currentPlayer) {
+        // Select a piece
+        game.selectedPiece = { row, col };
+        console.log(`Pieza seleccionada: ${piece}`);
+
+        // Check if this piece can capture
+        game.isCapturing = canPieceCapture(row, col);
+      }
+    }
+
+    function isValidDiagonalMove(startRow, startCol, endRow, endCol) {
+      const dx = Math.abs(endCol - startCol);
+      const dy = Math.abs(endRow - startRow);
+      return dx === 1 && dy === 1;
+    }
+
+    function canPieceCapture(row, col) {
+      const piece = game.board[row][col];
+      const opponent = game.currentPlayer === GameState.RED ? GameState.BLACK : GameState.RED;
+
+      // Check if capturing moves are possible
+      return (
+        (piece === GameState.RED && canCaptureDirection(row, col, 1, opponent)) ||
+        (piece === GameState.BLACK && canCaptureDirection(row, col, -1, opponent)) ||
+        (piece === GameState.RED_KING && canCaptureDirection(row, col, 1, opponent)) ||
+        (piece === GameState.BLACK_KING && canCaptureDirection(row, col, -1, opponent))
+      );
+    }
+
+    function canCaptureDirection(row, col, step, opponent) {
+      const nextRow = row + step;
+      const nextCol1 = col + 1;
+      const nextCol2 = col - 1;
+
+      return (
+        isOpponentPiece(nextRow, nextCol1, opponent) && game.board[nextRow + step][nextCol1 + 1] === GameState.EMPTY ||
+        isOpponentPiece(nextRow, nextCol2, opponent) && game.board[nextRow + step][nextCol2 - 1] === GameState.EMPTY
+      );
+    }
+
+    function isOpponentPiece(row, col, opponent) {
+      return row >= 0 && row < 8 && col >= 0 && col < 8 && game.board[row][col] === opponent;
+    }
+
+    function checkWinner() {
+      let redPieces = 0;
+      let blackPieces = 0;
+
+      for (let i = 0; i < 8; i++) {
+        for (let j = 0; j < 8; j++) {
+          if (game.board[i][j] === GameState.RED || game.board[i][j] === GameState.RED_KING) {
+            redPieces++;
+          } else if (game.board[i][j] === GameState.BLACK || game.board[i][j] === GameState.BLACK_KING) {
+            blackPieces++;
+          }
+        }
+      }
+
+      if (redPieces === 0) {
+        return GameState.BLACK;
+      } else if (blackPieces === 0) {
+        return GameState.RED;
+      }
+
+      return null;
+    }
+
+    function resetGame() {
+      game.board = [...initialBoardState];
+      game.currentPlayer = GameState.RED;
+      game.selectedPiece = null;
+      game.isCapturing = false;
+      renderBoard(game.board);
+      updateStatus();
+    }
+
+    // Función para actualizar el estado en la interfaz de usuario
+    function updateStatus() {
+      const statusElement = document.getElementById('status');
+      statusElement.textContent = `Turno del jugador ${game.currentPlayer === GameState.RED ? 'rojo' : 'negro'}`;
+    }
+  </script>
+</body>
+</html>
